@@ -9,6 +9,7 @@
 
 * web : 需要收集的模拟网站 8080
 * 打点服务器: nginx 8000 , 记录日志
+* run 生成日志程序，模拟大量用户访问
 * 分析服务：
 
 ### 流量统计系统
@@ -59,3 +60,17 @@ nginx 配置
 ```
 
 该模块使用c拼出一个1*1的gif.
+
+这里有个跨域的问题，暂时没管。
+
+
+access_log打开，将main的格式化打开，指定生成日志到dig.log
+
+```
+ log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+
+ access_log  logs/dig.log  main;
+```
