@@ -19,15 +19,13 @@ $(document).ready(function () {
     // getcookie() //js获取客户端cookie
     // loadXMLDoc();
 
-    var lock = true; //统计锁，防止页面上报多次，这里去查js锁的使用，示例先不管
-    $.get("http://localhost:8080/dig", {
+    // var lock = true; //统计锁，防止页面上报多次，这里去查js锁的使用，示例先不管
+    $.get("http://localhost:8000/dig", {
         "time": gettime(),
         "ip": getip(),
         "url": geturl(),
         "refer": getrefer(),
         "ua": getuser_agent(),
-    }, function () {
-        lock = false
     })
 
 
