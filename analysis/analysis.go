@@ -231,7 +231,7 @@ func formartUrl(url string, t string) (data UrlNode) {
 	}
 
 	//首页
-	data = UrlNode{"Index", 0, url, t}
+	data = UrlNode{"Index", 1, url, t}
 
 	return
 }
@@ -271,7 +271,7 @@ func cuteLogFetchData(logStr string) (dig DigData, err error) {
 func PvCounter(pvChannel chan UrlData, storageChannel chan StorageBlock) {
 
 	for data := range pvChannel {
-		sItem := StorageBlock{"pv", "ZINCREBY", data.UrlNode}
+		sItem := StorageBlock{"pv", "ZINCRBY", data.UrlNode}
 		storageChannel <- sItem
 	}
 
@@ -298,7 +298,7 @@ func UVCounter(uvChannel chan UrlData, storageChannel chan StorageBlock) (err er
 			continue
 		}
 
-		sItem := StorageBlock{"uv", "ZINCREBY", data.UrlNode}
+		sItem := StorageBlock{"uv", "ZINCRBY", data.UrlNode}
 		storageChannel <- sItem
 	}
 
@@ -326,8 +326,43 @@ func GetTime(logTime, timeType string) (timeStr string) {
 	return
 }
 
-//数据存储
-func DataStorage(blocks chan StorageBlock) {
-	//存redis ,这里要做连接池,这个测试使用一下
+//数据存储, 企业用一般使用HBase, 劣势，需要提前声明列簇
+func DataStorage(storageChannel chan StorageBlock) {
+
+	// 从池里获取连接
+	rc := redisClient.Get()
+	// 用完后将连接放回连接池
+	defer rc.Close()
+
+	for block := range storageChannel {
+		prefix := block.CounterType + "_"
+
+		//逐层添加， 加洋葱皮的过程
+		//如： 用户访问详情页， 详情页pv+1, 列表页pv+1, 网站pv+1， 上游都要加1
+		//维度： 天，小时，分钟
+		//层级: 顶级=>大分类=>小分类=>终极页面
+		//存储模型： redis SortedSet
+		setKeys := []string{
+			prefix + "day_" + GetTime(block.UrlNode.UrlTime, "day"),
+			prefix + "hour_" + GetTime(block.UrlNode.UrlTime, "hour"),
+			prefix + "min_" + GetTime(block.UrlNode.UrlTime, "min"),
+			prefix + block.UrlNode.UrlType + "day_" + GetTime(block.UrlNode.UrlTime, "day"),
+			prefix + block.UrlNode.UrlType + "day_" + GetTime(block.UrlNode.UrlTime, "hour"),
+			prefix + block.UrlNode.UrlType + "day_" + GetTime(block.UrlNode.UrlTime, "min"),
+		}
+
+		rowId := block.UrlNode.UrlResourceID
+
+		for _, value := range setKeys {
+
+			ret, err := redis.Int(rc.Do(block.storageModel, value, 1, rowId))
+			if err != nil || ret <= 0 {
+				log.Warnf("DataStorage redis storage err.", block.storageModel, value, rowId) //对少的错误不做处理
+			}
+
+			//成功太多，不做日志
+		}
+
+	}
 
 }
