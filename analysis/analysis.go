@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
+	"github.com/labstack/gommon/log"
+	"io"
+	"os"
 
 	"time"
 )
@@ -52,7 +56,7 @@ func main() {
 	// ## goroutine并发数，开启多少并发进行分析
 	routineNum := flag.Int("routineNum", 5 , "consumer goroutine num")
 	// 这个项目打印的运行日志输出到哪里
-	//targetLogFilePath := flag.String("logFilePath", "log/", "project runtime log  file path")
+	targetLogFilePath := flag.String("l", "log.txt", "project runtime log  file path")
 	flag.Parse()
 
 	params := CmdParams{
@@ -60,14 +64,14 @@ func main() {
 		RoutineNum: *routineNum,
 	}
 
-	////打日志
-	//logFd, err := os.OpenFile(*targetLogFilePath, os.O_CREATE|os.O_WRONLY, 0644)
-	//if err != nil {
-	//	log.Out = logFd
-	//	defer logFd.Close()
-	//}
-	//log.Infoln("Exec start.")
-	//log.Infoln("Params:", params)
+	//打日志
+	logFd, err := os.OpenFile(*targetLogFilePath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.SetOutput(logFd)
+		defer logFd.Close()
+	}
+	log.Info("Exec start.")
+	log.Info("Params:", params)
 
 
 	//初始化channel,用于数据传递
@@ -100,12 +104,45 @@ func main() {
 
 
 //按行消费日志文件
-func ReadFileByLine(params CmdParams, logChannel chan string) {
+func ReadFileByLine(params CmdParams, logChannel chan string) (err error) {
 
+	fd, err := os.Open(params.LogFilePath)
+	if err != nil {
+		log.Warnf("ReadFileByLine can't open file:%s", params.LogFilePath)
+		return err
+	}
+	defer  fd.Close()
+
+	count := 0 //计数器
+	bufferReader := bufio.NewReader(fd)
+	for  {
+		line, _, err := bufferReader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				log.Infof("ReadFileByLine wait, read line: %d", count)
+				time.Sleep(3 * time.Second) //如果读到日志末尾，那么休息3秒
+			}
+
+			log.Warnf("ReadFileByLine read log error")
+			//return err
+		}
+		logChannel <- string(line)
+		count++
+
+		if count % (1000 * params.RoutineNum) == 0 {
+			log.Infof("ReadFileByLine line: %d", count)
+		}
+
+	}
+
+
+	return
 }
 
 //日志处理
 func LogConsumer(strings chan string, data chan UrlData, data2 chan UrlData) {
+
+	
 
 }
 
