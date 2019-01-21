@@ -2,14 +2,22 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
+	"encoding/hex"
 	"flag"
 	"github.com/labstack/gommon/log"
 	"io"
+	"net/url"
 	"os"
+	"strings"
 
 	"time"
 )
 
+const (
+	Handle_Dig = " /dig?"
+	Handle_End = " HTTP/"
+)
 
 //传入参数
 type CmdParams struct {
@@ -140,10 +148,77 @@ func ReadFileByLine(params CmdParams, logChannel chan string) (err error) {
 }
 
 //日志处理
-func LogConsumer(strings chan string, data chan UrlData, data2 chan UrlData) {
+func LogConsumer(logChannel chan string, pvChannel chan UrlData, uvChannel chan UrlData) (err error) {
 
-	
+	//逐行消费
+	for logStr := range logChannel {
+		// 切割日志字符串，得到打点上报的日志
+		data, err := cuteLogFetchData(logStr)
+		if err != nil {
+			return err
+		}
 
+		//uid : 模拟生成uid md5(refer + ua)
+
+		hasher := md5.New()
+		hasher.Write([]byte(data.Refer + data.Ua))
+		uid := hex.EncodeToString(hasher.Sum(nil)) //16进制字符串
+
+
+		//解析都可以放这里
+		uData := UrlData{ data, uid}
+
+
+		log.Info("uData : ==>", uData)
+
+		pvChannel <- uData
+		uvChannel <- uData
+
+
+
+
+	}
+
+	return
+
+}
+
+//切割字符串,获得打点数据
+func cuteLogFetchData(logStr string) (dig DigData, err error) {
+
+	logStr = strings.TrimSpace(logStr)
+	pos1 := strings.Index(logStr, Handle_Dig)
+	if pos1 == -1 { //没找到
+		return
+	}
+	pos1 += len(Handle_Dig)//位置 + 偏移
+
+	pos2 := strings.Index(logStr, Handle_End)
+
+	d := logStr[pos1: pos2]
+
+	urlInfo, err := url.Parse("http://localhost?" +d)
+	if err != nil {
+		return
+	}
+
+
+	data := urlInfo.Query()
+
+	dig = DigData{
+		data.Get("time"),
+		data.Get("url"),
+		data.Get("refer"),
+		data.Get("ua"),
+	}
+
+
+
+
+
+
+
+	return
 }
 
 //pv统计
